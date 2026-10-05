@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Group = "Сэйон" | "Дакуон・хандакуон" | "Ёон";
 
@@ -186,10 +186,66 @@ export default function Home() {
   const [cardIndex, setCardIndex] = useState(() => randomIndex());
   const [showAnswer, setShowAnswer] = useState(false);
   const [answeredCount, setAnsweredCount] = useState(0);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(true);
 
   const card = cards[cardIndex];
 
+  useEffect(() => {
+    setSpeechSupported("speechSynthesis" in window);
+
+    return () => {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const stopSpeaking = () => {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+
+    setIsSpeaking(false);
+  };
+
+  const speakKana = () => {
+    if (!("speechSynthesis" in window)) {
+      setSpeechSupported(false);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(card.kana);
+
+    // 画面がロシア語でも、ひらがなは日本語として発音する
+    utterance.lang = "ja-JP";
+    utterance.rate = 0.65;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+    };
+
+    utterance.onend = () => {
+      setIsSpeaking(false);
+    };
+
+    utterance.onerror = (event) => {
+      if (event.error !== "canceled" && event.error !== "interrupted") {
+        setSpeechSupported(false);
+      }
+
+      setIsSpeaking(false);
+    };
+
+    window.speechSynthesis.speak(utterance);
+  };
+
   const nextCard = () => {
+    stopSpeaking();
     setCardIndex((currentIndex) => randomIndex(currentIndex));
     setShowAnswer(false);
     setAnsweredCount((count) => count + 1);
@@ -213,7 +269,7 @@ export default function Home() {
 
         <section className="flex flex-1 flex-col justify-center">
           <div className="rounded-3xl bg-white p-6 shadow-xl ring-1 ring-slate-200">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700">
                 {card.group}
               </span>
@@ -225,6 +281,7 @@ export default function Home() {
 
             <div className="flex min-h-72 items-center justify-center">
               <p
+                lang="ja"
                 className={`font-bold leading-none tracking-tight text-slate-900 ${
                   card.kana.length > 1 ? "text-[7rem]" : "text-[11rem]"
                 }`}
@@ -249,6 +306,32 @@ export default function Home() {
                 </p>
               )}
             </div>
+
+            {speechSupported ? (
+              <div className="mt-2 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={speakKana}
+                  className="min-h-14 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 font-bold text-violet-800 transition active:scale-[0.98]"
+                  aria-label={`Прослушать: ${card.kana}`}
+                >
+                  🔊 Слушать
+                </button>
+
+                <button
+                  type="button"
+                  onClick={stopSpeaking}
+                  disabled={!isSpeaking}
+                  className="min-h-14 rounded-2xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-700 transition enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ⏹ Остановить
+                </button>
+              </div>
+            ) : (
+              <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-center text-sm text-amber-800">
+                Озвучивание недоступно в этом браузере.
+              </p>
+            )}
           </div>
         </section>
 
